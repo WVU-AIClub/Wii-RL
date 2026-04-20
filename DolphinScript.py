@@ -39,7 +39,7 @@ except Exception as e:
 
 ####
 AI_PLAYER_INDEX = 0 # 0 = P1, 1 = P2 ...
-TOTAL_PLAYERS = 2
+TOTAL_PLAYERS = 1
 ####
 
 
@@ -515,11 +515,23 @@ class DolphinInstance:
 
     def apply_action(self, action):
         # We only apply actions if we are actually in a race (Stage 2)
-        # Stage 0 = Menu, Stage 1 = INtor, Stage 2 = Racing
+        # Stage 0 = Menu, Stage 1 = Intro, Stage 2 = Racing
+        print(self.memory_tracker.speed, self.memory_tracker.race_position,
+              self.memory_tracker.RaceCompletion, self.memory_tracker.offroadInvincibility,
+              self.memory_tracker.isTouchingOffroad, self.memory_tracker.stage)
+
         if self.memory_tracker.stage != 2:
             # Send neutral inputs so the AI doesn't mess up menu navigation
+
             self.wii_dic = {k: (False if isinstance(v, bool) else 0) for k, v in self.wii_dic.items()}
             self.wii_dic["Connected"] = True
+
+            # Create a toggle state if it doesn't exist yet
+            if not hasattr(self, 'spam_a_toggle'):
+                self.spam_a_toggle = False
+            self.spam_a_toggle = not self.spam_a_toggle
+
+            self.wii_dic["A"] = self.spam_a_toggle
             controller.set_gc_buttons(self.ai_player_index, self.wii_dic)
             return
 
