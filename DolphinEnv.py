@@ -145,9 +145,17 @@ class DolphinEnv:
         for i in range(self.num_envs):
             self.create_dolphin(i)
 
-    def _check_iso_validity(self):
+    def _check_iso_validity(self) -> None:
+        """
+        This double checks the ISO validity. It has a list of valid numbers,
+        and runs the MD5 hash. It is not tested but it appears that one number in 
+        the valid number is for US and european. Then prints if the ROM is valid.
+
+        Throws:
+            FileNotFoundError: If there is no game_path found.
+        """
         valid_numbers = [
-            'e7b1ff1fabb0789482ce2cb0661d986e',
+            'e7b1ff1fabb0789482ce2cb0661d986e', # European: VERIFIED
             'ba68b5d7602bb6cd3d51f301f205e3dd'
         ]
 
@@ -161,6 +169,16 @@ class DolphinEnv:
             print("The ROM provided is valid.")
 
     def increment_alive(self, path='alive.txt'):
+        """
+        Locates the file, reads the number in the file and increments and returns 
+        previous int. If no file exists, then, it writes 0 to the file.
+
+        Args:
+            path (string): Filepath name of
+
+        Returns:
+            int - the number found in the file.
+        """
         path = self.project_folder / Path(path)
         alive_num = int(path.read_text().strip()) if path.exists() else 0
         path.write_text(str(alive_num + 1))
@@ -174,6 +192,11 @@ class DolphinEnv:
         print(f"[Master] Dolphin {i} connected!")
 
     def create_dolphin(self, i):
+        """
+        Args:
+            i (int) - ID number of the dolphin instance.
+        """
+
         print(f"Creating new Dolphin for process {i}")
         """Launch Dolphin i, then block on accept() for its new connection."""
         alive_num = self.increment_alive()
@@ -190,7 +213,7 @@ class DolphinEnv:
             exe_path = self.project_folder / f'dolphin{i}' / 'Dolphin.exe'
             cmd = (
                 f'cmd /c {exe_path} '
-                f'--no-python-subinterpreters '
+                f'--no-python-subinterpreters ' # Keep it tied this Python instance
                 f'--script "{script_path}" '
                 f'\\b --exec="{self.games_folder/self.gamefile}"'
             )

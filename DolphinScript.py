@@ -37,6 +37,13 @@ except Exception as e:
     print(e)
     raise Exception("stop")
 
+####
+AI_PLAYER_INDEX = 0 # 0 = P1, 1 = P2 ...
+TOTAL_PLAYERS = 2
+####
+
+
+
 def increment_alive(path='alive.txt'):
     path = script_directory / Path(path)
     alive_num = int(path.read_text().strip()) if path.exists() else 0
@@ -92,54 +99,57 @@ def set_value(new_val: float):
 
 class Memory:
     class Addresses:
-        def __init__(self):
+        def __init__(self, ai_player_index=0):
+            # In MKWii emmory structures, player pointer arrays typically increment by 0x4 per player.
+            p_off = ai_player_index * 4
+
             # RaceManagerPlayer
-            self.RaceCompletion = self.resolve_address(0x809BD730, [0xC, 0x0, 0xC])
+            self.RaceCompletion = self.resolve_address(0x809BD730, [0xC, p_off, 0xC])
             # LapCompletion was on a per-checkpoint basis, RaceCompletion is interpolated
 
-            self.currentLap = self.resolve_address(0x809BD730, [0xC, 0x0, 0x24])
+            self.currentLap = self.resolve_address(0x809BD730, [0xC, p_off, 0x24])
             self.countdownTimer = self.resolve_address(0x809BD730, [0x22])
             self.stage = self.resolve_address(0x809BD730, [0x28])
 
             # KartDynamics - Iterate 3 times with 4 bytes offset to get X, Y and Z.
-            self.position = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x8, 0x90, 0x18])
-            self.acceleration_KartDynamics = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x8, 0x90, 0x4, 0x80])
-            self.mainRotation = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x8, 0x90, 0x4, 0xF0])
-            self.internalVelocity = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x8, 0x90, 0x4, 0x14C])
-            self.externalVelocity = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x8, 0x90, 0x4, 0x74])
-            self.angularVelocity = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x8, 0x90, 0x4, 0xA4])
-            self.velocity = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x8, 0x90, 0x4, 0xD4])
+            self.position = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x8, 0x90, 0x18])
+            self.acceleration_KartDynamics = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x8, 0x90, 0x4, 0x80])
+            self.mainRotation = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x8, 0x90, 0x4, 0xF0])
+            self.internalVelocity = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x8, 0x90, 0x4, 0x14C])
+            self.externalVelocity = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x8, 0x90, 0x4, 0x74])
+            self.angularVelocity = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x8, 0x90, 0x4, 0xA4])
+            self.velocity = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x8, 0x90, 0x4, 0xD4])
 
             # KartMove
-            self.speed = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x28, 0x20])
-            self.acceleration_KartMove = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x28, 0x30])
-            self.miniturboCharge = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x44, 0xFE])
+            self.speed = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x28, 0x20])
+            self.acceleration_KartMove = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x28, 0x30])
+            self.miniturboCharge = self.resolve_address(0x809C18F8, [0x20, p_off, 0x44, 0xFE])
 
             # Can be used as a mushroom timer as well
-            self.offroadInvincibility = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x28, 0x148])
+            self.offroadInvincibility = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x28, 0x148])
 
-            self.wheelieFrames = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x28, 0x2A8])
-            self.wheelieCooldown = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x28, 0x2B6])
-            self.leanRot = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x28, 0x294])
+            self.wheelieFrames = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x28, 0x2A8])
+            self.wheelieCooldown = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x28, 0x2B6])
+            self.leanRot = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x28, 0x294])
 
             # KartState
-            self.bitfield2 = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x4, 0xC])
+            self.bitfield2 = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x4, 0xC])
 
             # KartCollide
-            self.surfaceFlags = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x18, 0x18, 0x2C])
+            self.surfaceFlags = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x18, 0x18, 0x2C])
 
             # Misc
             self.mushroomCount = self.resolve_address(0x809C3618, [0x14, 0x90])
-            self.hopPos = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x44, 0x22C])
+            self.hopPos = self.resolve_address(0x809C18F8, [0x20, p_off, 0x44, 0x22C])
 
             # I added
-            self.mt_boost_timer = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x28, 0x102])
-            self.airtime = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x4, 0x1C])
-            self.allmt = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x28, 0x10C])
-            self.mush_and_boost = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x28, 0x110])
-            self.floor_collision_count = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x18, 0x40])
-            self.race_position = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x18, 0x3C])
-            self.respawn_timer = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x18, 0x18, 0x48])
+            self.mt_boost_timer = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x28, 0x102])
+            self.airtime = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x4, 0x1C])
+            self.allmt = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x28, 0x10C])
+            self.mush_and_boost = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x28, 0x110])
+            self.floor_collision_count = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x18, 0x40])
+            self.race_position = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x18, 0x3C])
+            self.respawn_timer = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x18, 0x18, 0x48])
 
             # this is called m_types in KartPhysics->CollisionGroup->CollisionData
             self.wall_collide = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x8, 0x90, 0x8, 0x8])
@@ -157,15 +167,19 @@ class Memory:
             quick succession. base_address is dereferenced first, and then
             offsets are applied.
             """
-            current_address = memory.read_u32(base_address)
-            for offset in offsets:
-                value_address = current_address + offset
-                current_address = memory.read_u32(current_address + offset)
+            try:
+                current_address = memory.read_u32(base_address)
+                for offset in offsets:
+                    value_address = current_address + offset
+                    current_address = memory.read_u32(current_address + offset)
 
-            return value_address
+                return value_address
+            except:
+                return 0
 
-    def __init__(self):
-        self.addresses = self.Addresses()
+    def __init__(self, ai_player_index=0):
+        self.ai_player_index = ai_player_index
+        self.addresses = self.Addresses(ai_player_index)
 
         # RaceManagerPlayer
         self.RaceCompletion: float = 0.0
@@ -287,7 +301,9 @@ class Memory:
         return np.array([np.degrees(roll), np.degrees(pitch), np.degrees(yaw)])
 
 class DolphinInstance:
-    def __init__(self, id):
+    def __init__(self, id, ai_player_index=0, total_players=1):
+        self.ai_player_index = ai_player_index
+        self.total_players = total_players
 
         address = ('localhost', 26330 + id)
         print(f"Connecting to master at {address}...")
@@ -358,7 +374,14 @@ class DolphinInstance:
         self.conn.send("Sent initial states")
 
     def recieve_action(self):
-        self.applied_action = self.conn.recv()
+        try:
+            # Check if there is actually data waiting for us
+            if self.conn.poll():
+                self.applied_action = self.conn.recv()
+            # If no data, we just keep using the last action
+        except (EOFError, ConnectionResetError):
+            print("Master disconnected. Check if your training/eval script crashed.")
+            raise Exception("Stop Script")
 
     def send_transition(self, reward, terminal, trun, new_img):
         # write into shared memory
@@ -378,6 +401,29 @@ class DolphinInstance:
 
 
     def process_indiv_frame(self, img):
+        """
+        Dynamically crops the split-scrren rendered frame so the AI only receives its own viewport
+        before resizing it down to the neural net
+        """
+        width, height = img.size
+
+        if self.total_players == 2:
+            if self.ai_player_index == 0:
+                img = img.crop((0, 0, width, height // 2))
+            else:
+                img = img.crop((0, height // 2, width, height))
+
+        # 3 or 4 player split
+        elif self.total_players >= 3:
+            w2, h2 = width // 2, height // 2
+            if self.ai_player_index == 0:
+                img = img.crop((0, 0, w2, h2))
+            elif self.ai_player_index == 1:
+                img = img.crop((w2, 0, width, h2))
+            elif self.ai_player_index == 2:
+                img = img.crop((0, h2, w2, height))
+            elif self.ai_player_index == 3:
+                img = img.crop((w2, h2, width, height))
         # img == (834, 456), (this is 832 is the X, this is a widescreen image)
 
         # greyscale
@@ -444,11 +490,21 @@ class DolphinInstance:
         # just make sure we don't list index out of range
         self.checkpoints.append(9999.)
 
-        # pick a random state to reset to
-        save_states = [file for file in Path(save_states_path).rglob('*') if file.is_file() and ".s" in file.name]
-        savestate.load_from_file(str(random.choice(save_states)))
+        # --- Multiplayer Change ---
+        # Instead of loading a random save state (which teleports humans),
+        # we simply re-initialize the memory tracker for the current character/kart.
+        # This allows humans to go to the menu and change their settings.
 
-        self.memory_tracker = Memory()
+        self.memory_tracker = Memory(ai_player_index=self.ai_player_index)
+        ## NOTE: This is what will have to change
+        # I need it to start at the starting line and then continue the entire race
+        # I also need the ability for the human players to change their Karts/Players
+
+        # pick a random state to reset to
+        # save_states = [file for file in Path(save_states_path).rglob('*') if file.is_file() and ".s" in file.name]
+        # savestate.load_from_file(str(random.choice(save_states)))
+
+        # self.memory_tracker = Memory()
 
         self.get_mem_values()
 
@@ -458,6 +514,15 @@ class DolphinInstance:
 
 
     def apply_action(self, action):
+        # We only apply actions if we are actually in a race (Stage 2)
+        # Stage 0 = Menu, Stage 1 = INtor, Stage 2 = Racing
+        if self.memory_tracker.stage != 2:
+            # Send neutral inputs so the AI doesn't mess up menu navigation
+            self.wii_dic = {k: (False if isinstance(v, bool) else 0) for k, v in self.wii_dic.items()}
+            self.wii_dic["Connected"] = True
+            controller.set_gc_buttons(self.ai_player_index, self.wii_dic)
+            return
+
         assert 0 <= action < self.n_actions, f"Action must be in 0..{self.n_actions-1}"
 
         # reset dictionary to default state (A is always held down)
@@ -487,7 +552,7 @@ class DolphinInstance:
         self.wii_dic["L"] = self.l_values[l_idx]
 
         self.applied_action = action
-        controller.set_gc_buttons(0, self.wii_dic)
+        controller.set_gc_buttons(self.ai_player_index, self.wii_dic)
 
     def get_reward_terminal_trun(self):
         reward = 0.
@@ -526,7 +591,7 @@ class DolphinInstance:
 for i in range(4):
     await event.frameadvance()
 
-env = DolphinInstance(id)
+env = DolphinInstance(id, ai_player_index=AI_PLAYER_INDEX, total_players=TOTAL_PLAYERS)
 
 for i in range(8):
     await event.frameadvance()
@@ -558,9 +623,37 @@ print("Starting Main Loop...")
 # atari pools the most recent two frames, don't blame me why its so confusing
 frame_data = np.zeros((frames_pooled, env.window_y, env.window_x), dtype=np.uint8)
 while True:
+    env.memory_tracker.update()
+
+    # If we aren't racing, just wait and keep the game speed normal
+    # if env.memory_tracker.stage != 2:
+    #     # Send neutral inputs to Port 2
+    #     controller.set_gc_buttons(AI_PLAYER_INDEX, {"Connected": True})
+    #     await event.frameadvance()
+    #     continue    
 
     # get action from main Dolphin Script
     env.recieve_action()
+
+    # 2. Decode and Print the Action for you to see
+    # This breaks down the action integer using the same math as define_action_space
+    action = env.applied_action
+    stick_idx = action // (2 * 2 * 2)
+    rem = action % (2 * 2 * 2)
+    r_idx = rem // (2 * 2)
+    rem = rem % (2 * 2)
+    up_idx = rem // 2
+    l_idx = rem % 2
+    
+    # Printing to the Dolphin Script Log
+    status = f"Action {action}"
+    if env.r_values[r_idx]: status += " | [DRIFT]"
+    if env.up_values[up_idx]: status += " | [WHEELIE/TRICK]"
+    if env.l_values[l_idx]: status += " | [ITEM]"
+    
+    print(status)
+
+
 
     for i in range(env.frameskip):
         if i >= env.frameskip - frames_pooled:
@@ -573,6 +666,14 @@ while True:
             await event.frameadvance()
 
         rewardN, terminalN, trunN = env.get_reward_terminal_trun()
+
+        # NEW: Check if we just finished a race or are in a menu
+        # Race Stage 4 = Finished / Stage 1 = Countdown / Stage 0 = Menu
+        if env.mem_race_stage == 0:
+            # We are in a menu; allow humans to change Karts.
+            # We don't want the AI to "fail" or "reset" while humans are picking characters.
+            await event.frameadvance()
+            continue
 
         if not terminal and not trun:
             terminal = terminal or terminalN
