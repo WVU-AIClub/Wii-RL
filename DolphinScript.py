@@ -38,8 +38,8 @@ except Exception as e:
     raise Exception("stop")
 
 ####
-AI_PLAYER_INDEX = 0 # 0 = P1, 1 = P2 ...
-TOTAL_PLAYERS = 1
+AI_PLAYER_INDEX = 1 # 0 = P1, 1 = P2 ...
+TOTAL_PLAYERS = 2
 ####
 
 
@@ -187,6 +187,7 @@ class Memory:
         self.countdownTimer: int = 0
         self.stage: int = 0
 
+
         # KartDynamics = list[float]
         self.position = np.array([0.0, 0.0, 0.0])
         self.acceleration_KartDynamics = np.array([0.0, 0.0, 0.0])
@@ -278,6 +279,8 @@ class Memory:
 
         self.trickableTimer = memory.read_u16(self.addresses.trickableTimer)
         self.trick_cooldown = memory.read_u16(self.addresses.trick_cooldown)
+
+        print(self.speed, self.stage)
 
     @staticmethod
     def Quat2Euler(quaternion):
