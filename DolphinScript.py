@@ -152,13 +152,13 @@ class Memory:
             self.respawn_timer = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x18, 0x18, 0x48])
 
             # this is called m_types in KartPhysics->CollisionGroup->CollisionData
-            self.wall_collide = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x8, 0x90, 0x8, 0x8])
+            self.wall_collide = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x8, 0x90, 0x8, 0x8])
 
-            self.soft_speed_limit = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x28, 0x18])
+            self.soft_speed_limit = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x28, 0x18])
 
-            self.trickableTimer = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x4, 0xA6])
+            self.trickableTimer = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x4, 0xA6])
 
-            self.trick_cooldown = self.resolve_address(0x809C18F8, [0x20, 0x0, 0x0, 0x28, 0x258, 0x38])
+            self.trick_cooldown = self.resolve_address(0x809C18F8, [0x20, p_off, 0x0, 0x28, 0x258, 0x38])
 
         @staticmethod
         def resolve_address(base_address, offsets):
@@ -280,8 +280,6 @@ class Memory:
         self.trickableTimer = memory.read_u16(self.addresses.trickableTimer)
         self.trick_cooldown = memory.read_u16(self.addresses.trick_cooldown)
 
-        print(self.speed, self.stage)
-
     @staticmethod
     def Quat2Euler(quaternion):
 
@@ -329,6 +327,8 @@ class DolphinInstance:
         self.frameskip = 4
         self.frames = deque([], maxlen=self.framestack) #frame buffer for framestacking
         self.num_envs = num_envs
+
+        self.racing = False
         print(f"Num envs{self.num_envs}")
 
         try:
@@ -517,27 +517,6 @@ class DolphinInstance:
 
 
     def apply_action(self, action):
-        # We only apply actions if we are actually in a race (Stage 2)
-        # Stage 0 = Menu, Stage 1 = Intro, Stage 2 = Racing
-        print(self.memory_tracker.speed, self.memory_tracker.race_position,
-              self.memory_tracker.RaceCompletion, self.memory_tracker.offroadInvincibility,
-              self.memory_tracker.isTouchingOffroad, self.memory_tracker.stage)
-
-        if self.memory_tracker.stage != 2:
-            # Send neutral inputs so the AI doesn't mess up menu navigation
-
-            self.wii_dic = {k: (False if isinstance(v, bool) else 0) for k, v in self.wii_dic.items()}
-            self.wii_dic["Connected"] = True
-
-            # Create a toggle state if it doesn't exist yet
-            if not hasattr(self, 'spam_a_toggle'):
-                self.spam_a_toggle = False
-            self.spam_a_toggle = not self.spam_a_toggle
-
-            self.wii_dic["A"] = self.spam_a_toggle
-            controller.set_gc_buttons(self.ai_player_index, self.wii_dic)
-            return
-
         assert 0 <= action < self.n_actions, f"Action must be in 0..{self.n_actions-1}"
 
         # reset dictionary to default state (A is always held down)
@@ -549,6 +528,14 @@ class DolphinInstance:
             "CStickY": 0, "TriggerLeft": 0, "TriggerRight": 0,
             "AnalogA": 0, "AnalogB": 0, "Connected": True
         }
+
+        if not self.racing:
+            spam_a = (env.ep_length % 10 < 5)
+            self.wii_dic["A"] = spam_a
+            print(self.wii_dic)
+            controller.set_gc_buttons(self.ai_player_index, self.wii_dic)
+            return
+
 
         self.get_mem_values()
 
@@ -603,6 +590,30 @@ class DolphinInstance:
 
         return reward, terminal, trun
 
+    def detect_race_start(self, img):
+        """
+        Checks the center of the raw RGB image for the bright 'GO!' signal.
+        """
+        width, height = img.size
+        # Define a small 20x20 box in the dead center
+        left = (width // 2) - 10
+        top = (height // 2) - 10
+        right = (width // 2) + 10
+        bottom = (height // 2) + 10
+        
+        center_crop = img.crop((left, top, right, bottom))
+        
+        # Convert to numpy to get average color
+        avg_color = np.array(center_crop).mean(axis=(0, 1))
+        
+        # The 'GO' signal is very bright and has a strong Green component.
+        # R ~ 150+, G ~ 240+, B ~ 50-
+        # We'll use a simple brightness + green-dominance check
+        is_bright = np.sum(avg_color) > 450 
+        is_green = avg_color[1] > avg_color[0] and avg_color[1] > avg_color[2]
+
+        return is_bright and is_green
+
 for i in range(4):
     await event.frameadvance()
 
@@ -637,15 +648,9 @@ frames_pooled = 2
 print("Starting Main Loop...")
 # atari pools the most recent two frames, don't blame me why its so confusing
 frame_data = np.zeros((frames_pooled, env.window_y, env.window_x), dtype=np.uint8)
+race_started = False
 while True:
     env.memory_tracker.update()
-
-    # If we aren't racing, just wait and keep the game speed normal
-    # if env.memory_tracker.stage != 2:
-    #     # Send neutral inputs to Port 2
-    #     controller.set_gc_buttons(AI_PLAYER_INDEX, {"Connected": True})
-    #     await event.frameadvance()
-    #     continue    
 
     # get action from main Dolphin Script
     env.recieve_action()
@@ -666,14 +671,30 @@ while True:
     if env.up_values[up_idx]: status += " | [WHEELIE/TRICK]"
     if env.l_values[l_idx]: status += " | [ITEM]"
     
-    print(status)
+    # print(status)
 
 
 
     for i in range(env.frameskip):
+        
         if i >= env.frameskip - frames_pooled:
             # get frame data
             (width, height, data) = await event.framedrawn()
+            img_raw = Image.frombytes('RGB', (width, height), data, 'raw')
+            if not race_started:
+                if env.detect_race_start(img_raw):
+                    print("VISUAL DETECT - RACE START")
+                    race_started = True
+                    env.racing = True
+                else:
+                    env.racing = False
+                    # INCREMENT HERE so the A button can toggle
+                    env.ep_length += 1 
+                    await event.frameadvance()
+                    continue # Still in menu, skip the rest of the race logic
+
+
+
             new_img = env.process_indiv_frame(Image.frombytes('RGB', (width, height), data, 'raw'))
             frame_data[i - frames_pooled] = new_img
         else:
